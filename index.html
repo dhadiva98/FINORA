@@ -5,6 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#F7F2EA">
 <title>Finora</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="192x192" href="iconos/finora-192.png">
+<link rel="apple-touch-icon" href="iconos/finora-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Finora">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="description" content="Tus cuentas, tus sobres y el inventario de casa, en un solo lugar.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@500;600;700&family=Nunito:ital,wght@0,400;0,500;0,600;0,700;1,400;1,600&display=swap" rel="stylesheet">
@@ -1851,16 +1859,21 @@ function formAjustes(){
        <input id="cAviso" type="number" value="${c.avisoDefault??7}"> </label>
      <div class="hint">Es el aviso por defecto. Cada producto puede tener el suyo.</div>
 
-     <h3 style="padding:0;font-size:15px;margin-top:20px">Gastos que se repiten</h3>
+     <h4>Gastos que se repiten</h4>
      <div class="hint">Los que ya sabes que vienen: universidad, lavandería, luz. Finora los descuenta de lo que puedes gastar aunque todavía no los hayas pagado.</div>
      <div id="listaRec"></div>
      <button class="btn full ghost sm" id="bRec" style="margin-top:8px">Añadir gasto fijo</button>
 
-     <h3 style="padding:0;font-size:15px;margin-top:20px">Categorías y tiendas</h3>
+     <h4>Categorías y tiendas</h4>
      <div class="two"><button class="btn sm ghost" id="bCat">Categorías</button>
        <button class="btn sm ghost" id="bTie">Tiendas</button></div>
 
-     <h3 style="padding:0;font-size:15px;margin-top:20px">Tus datos</h3>
+     <h4>Finora en tu escritorio</h4>
+     <div class="hint">Instálala y se abre como una app, con su propio ícono y sin barra del navegador. Sigue funcionando sin internet.</div>
+     <button class="btn full soft sm" id="btnInstalar" style="display:none">Instalar Finora</button>
+     <div id="estadoInstal"></div>
+
+     <h4>Tus datos</h4>
      <div class="hint">Todo vive en este navegador, en esta laptop. Si abres Finora en otro dispositivo, empieza vacía. Exporta de vez en cuando para no perder nada.</div>
      <div class="two"><button class="btn sm soft" id="bExp">Exportar</button>
        <button class="btn sm soft" id="bImp">Importar</button></div>
@@ -1892,6 +1905,11 @@ function formAjustes(){
       $("#bRec").onclick=()=>formRecurrente(()=>{formAjustes()});
       $("#bCat").onclick=()=>formCategorias();
       $("#bTie").onclick=()=>formTiendas();
+      const bi=$("#btnInstalar"), est=$("#estadoInstal");
+      if(yaInstalada()) est.innerHTML=`<div class="trace"><div><span>Ya está instalada</span><span>✓</span></div></div>`;
+      else if(PROMPT_INSTALL) bi.style.display="";
+      else est.innerHTML=`<div class="hint">Si no aparece el botón: en Chrome de escritorio busca el ícono de instalar en la barra de direcciones. En iPhone, Compartir → Añadir a inicio.</div>`;
+      bi.onclick=instalar;
       $("#bExp").onclick=exportar;
       $("#bImp").onclick=importar;
       $("#bReset").onclick=async()=>{
@@ -2034,6 +2052,32 @@ document.addEventListener("click",e=>{
 });
 document.addEventListener("keydown",e=>{if(e.key==="Escape")cerrar()});
 
+/* ---------------- instalación como app ---------------- */
+let PROMPT_INSTALL=null;
+const yaInstalada=()=>{
+  try{ return (typeof matchMedia==="function" && matchMedia("(display-mode: standalone)").matches)
+    || navigator.standalone===true; }catch{ return false }
+};
+window.addEventListener("beforeinstallprompt",e=>{
+  e.preventDefault(); PROMPT_INSTALL=e;
+  const b=document.getElementById("btnInstalar"); if(b) b.style.display="";
+});
+window.addEventListener("appinstalled",()=>{PROMPT_INSTALL=null;toast("Finora quedó instalada")});
+async function instalar(){
+  if(!PROMPT_INSTALL) return toast("Tu navegador aún no ofrece instalarla");
+  PROMPT_INSTALL.prompt();
+  const {outcome}=await PROMPT_INSTALL.userChoice;
+  PROMPT_INSTALL=null;
+  if(outcome!=="accepted") toast("Puedes instalarla cuando quieras desde Ajustes");
+}
+function registrarSW(){
+  if(!("serviceWorker" in navigator)) return;
+  if(location.protocol==="file:") return;   // hace falta http o https
+  window.addEventListener("load",()=>{
+    navigator.serviceWorker.register("sw.js",{scope:"./"}).catch(()=>{});
+  });
+}
+
 function aplicarTema(){
   const t=S.config.tema==="oscuro"?"dark":"light";
   document.documentElement.dataset.theme=t;
@@ -2053,7 +2097,11 @@ async function iniciar(){
   $("#mNext").onclick=()=>{MES=mesShift(MES,1);render()};
   $("#btnCfg").onclick=formAjustes;
   $("#fab").onclick=()=>formMovimiento();
-  pintarTabs(); ir("inicio");
+  registrarSW();
+  const q=new URLSearchParams(location.search);
+  const tabInicial=["inicio","sobres","movs","casa","cuentas"].includes(q.get("tab"))?q.get("tab"):"inicio";
+  pintarTabs(); ir(tabInicial);
+  if(q.get("accion")==="gasto") setTimeout(()=>formMovimiento(),260);
 }
 iniciar();
 
